@@ -8,3 +8,11 @@ class CantUpdateUser(BaseException):
 
 class CantUpdateUserStatus(CantUpdateUser):
     pass
+
+
+class UserDoesNotExist(BaseException):
+    pass
+
+
+class GroupDoesNotExist(BaseException):
+    pass

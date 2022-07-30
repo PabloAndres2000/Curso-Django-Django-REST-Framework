@@ -7,6 +7,7 @@ from store.apps.users.models import User
 
 # Providers (User)
 from store.apps.users.providers import user as user_providers
+from store.utils.constants import TRY_AGAIN_LATER
 
 # Utils (Error_handler)
 from store.utils.error_handler import ErrorHandler
@@ -36,24 +37,24 @@ class UserSignUpSerializer(serializers.Serializer):
     """
     first_name = serializers.CharField(max_length=255)
     last_name = serializers.CharField(max_length=255)
-    dentification_number = serializers.CharField(max_length=20)
+    identification_number = serializers.CharField(max_length=20)
     email = serializers.EmailField(max_length=255)
     phone_number = serializers.CharField(max_length=15)
+    password = serializers.CharField(min_length=5)
 
     def validate(self, data):
-        error_handler = ErrorHandler()
-        data["email"] = "alo@caquita.com"
 
+        error_handler = ErrorHandler()
         if user_providers.get_user_by_email(email=data["email"].lower()):
             error_handler.handler_error(
                 field_name="email",
-                error="Lo sentimos, por favor intenta nuevamente",
+                error=TRY_AGAIN_LATER,
             )
         if user_providers.get_user_by_identification_number(identification_number=data["identification_number"].lower()
                                                             ):
             error_handler.handler_error(
                 field_name="identification_number",
-                error="Lo sentimos, por favor intenta nuevamente"
+                error=TRY_AGAIN_LATER
             )
         if error_handler.have_errors():
             raise error_handler.raise_errors()
@@ -66,8 +67,67 @@ class UserSignUpSerializer(serializers.Serializer):
             identification_number=validated_data["identification_number"],
             phone_number=validated_data["phone_number"],
             email=validated_data["email"],
-            email=validated_data["email"],
             ip_address=self.context.get("ip_address"),
             password=validated_data["password"],
         )
         return user
+
+
+class UpdateSerializer(serializers.Serializer):
+    first_name = serializers.CharField(max_length=255)
+    last_name = serializers.CharField(max_length=255)
+    identification_number = serializers.CharField(max_length=20)
+    email = serializers.EmailField(max_length=255)
+    phone_number = serializers.CharField(max_length=15)
+
+    def validate(self, data):
+        instance = getattr(self, "instance", None)
+        same_email = instance.email == data["email"]
+        same_identification_number = (
+            instance.identification_number == data["identification_number"]
+        )
+
+        error_handler = ErrorHandler()
+
+        if (
+            user_providers.get_user_by_email(email=data["email"].lower())
+            and not same_email
+        ):
+            error_handler.handle_error(
+                field_name="email",
+                error="Ya existe un usuario con este email",
+            )
+        if (
+            user_providers.get_user_by_identification_number(
+                identification_number=data["identification_number"].lower()
+            )
+            and not same_identification_number
+        ):
+            error_handler.handle_error(
+                field_name="identification_number",
+                error="Ya existe un usuario con este rut",
+            )
+        if error_handler.have_errors():
+            raise error_handler.raise_errors()
+        return data
+
+    def update(self, instance, validated_data):
+        user = user_providers.update_user_by_pk(
+            user_pk=int(instance.pk), **validated_data)
+        return user
+
+
+class UpdatePasswordSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(min_length=8, max_length=255)
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "password",
+        ]
+
+    def update(self, instance, validated_data):
+        instance.set_password(validated_data["password"])
+        instance.save(update_field=["password", "updated_at"])
+        return instance
